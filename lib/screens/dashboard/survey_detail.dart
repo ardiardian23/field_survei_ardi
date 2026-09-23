@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
-
+import 'package:flutter_application_2/screens/auth/login_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_application_2/screens/auth/login_page.dart';
+import 'package:flutter_application_2/screens/dashboard/survey_form.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -19,85 +21,51 @@ class SurveyDetailPage extends StatefulWidget {
 }
 
 class _SurveyDetailPageState extends State<SurveyDetailPage> {
-  // ============================================================
-  // API
-  // ============================================================
-
-  static const String baseUrl = 'https://sijala.biz.id/api/v1';
-  static const String imageUrl = 'https://sijala.biz.id/api/image';
-
-  // ============================================================
-  // WARNA SAMA DENGAN SURVEY SCREEN
-  // ============================================================
-
-  static const Color primaryColor = const Color(0xFF4F46E5);
-
-  static const Color lightBlueColor = Color(0xFFEFF6FF);
-
-  static const Color backgroundColor = Color(0xFFF8FAFC);
-
-  static const Color borderColor = Color(0xFFE2E8F0);
-
-  static const Color textColor = Color(0xFF0F172A);
-
-  static const Color secondaryTextColor = Color(0xFF64748B);
-
-  // ============================================================
-  // STATE
-  // ============================================================
-
+  // 1. STATE VARIABEL HALAMAN
+  // Menyiapkan detail survey dalam bentuk Map
   Map<String, dynamic>? survey;
-
+  // Menandai status loading saat memuat data
   bool isLoading = true;
-
+  // Pesan error pemuat data
   String? errorMessage;
-
+  // Menyiapkan data gambar dalam format byte
   Uint8List? imageBytes;
-
   bool isLoadingImage = false;
 
-  // ============================================================
-  // INIT STATE
-  // ============================================================
+  // WARNA Utama
+  static const Color primaryColor = Color(0xFF1E4BAF);
 
+  // 2. LIFECYCLE
   @override
   void initState() {
     super.initState();
     fetchDetail();
   }
 
-  // ============================================================
-  // GET TOKEN
-  // ============================================================
-
-  Future<String> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    return prefs.getString('token') ?? '';
-  }
-
-  // ============================================================
-  // GET DETAIL SURVEY
-  // ============================================================
-
+  // 3. REST API: MENGAMBIL DETAIL SURVEY
   Future<void> fetchDetail() async {
-    if (mounted) {
-      setState(() {
-        isLoading = true;
-        errorMessage = null;
-        imageBytes = null;
-      });
-    }
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+    imageBytes = null;
 
     try {
-      final token = await getToken();
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
       if (token.isEmpty) {
-        throw Exception('Token tidak ditemukan. Silakan login kembali.');
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+          (route) => false,
+        );
+        return;
       }
 
-      final url = Uri.parse('$baseUrl/surveys/${widget.surveyId}');
-
+      // Mengambil detail survey berdasarkan ID
+      final url = Uri.parse('https://sijala.biz.id/api/v1/surveys/${widget.surveyId}');
       final response = await http.get(
         url,
         headers: {
@@ -106,102 +74,77 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
         },
       );
 
-      debugPrint('STATUS DETAIL: ${response.statusCode}');
-      debugPrint('RESPONSE DETAIL: ${response.body}');
-
-      // TOKEN EXPIRED
+      // Token kedaluwarsa
       if (response.statusCode == 401) {
-        final prefs = await SharedPreferences.getInstance();
-
         await prefs.remove('token');
         await prefs.remove('user');
-
-        throw Exception('Sesi login telah berakhir.');
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+          (route) => false,
+        );
+        return;
       }
 
-      // SUCCESS
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-
-        Map<String, dynamic>? data;
-
-        if (result is Map && result['data'] is Map) {
-          data = Map<String, dynamic>.from(result['data']);
-        } else if (result is Map && result['id'] != null) {
-          data = Map<String, dynamic>.from(result);
-        }
-
-        if (data != null) {
-          if (!mounted) return;
-
+        if (result['status'] == true && result['data'] != null) {
+          final data = Map<String, dynamic>.from(result['data']);
           setState(() {
             survey = data;
             isLoading = false;
           });
 
-          final photoName =
-              data['photo']?.toString() ?? data['image']?.toString() ?? '';
-
-          if (photoName.isNotEmpty &&
-              photoName != 'null' &&
+          // Mengambil foto survey
+          final photoName = data['photo']?.toString();
+          if (photoName != null &&
+              photoName.isNotEmpty &&
               photoName != 'placeholder.jpg') {
-            await fetchImage(photoName, token);
+            fetchImage(photoName, token);
           }
-
           return;
         }
       }
-
-      throw Exception('Survey tidak ditemukan.');
+      throw Exception('Survey tidak ditemukan (Kode: ${response.statusCode})');
     } catch (e) {
-      debugPrint('DETAIL SURVEY ERROR: $e');
-
       if (!mounted) return;
-
       setState(() {
         isLoading = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = 'Gagal memuat detail survey. Periksa koneksi Anda.';
       });
     }
   }
 
-  // ============================================================
-  // GET IMAGE
-  // ============================================================
-
+  // 4. REST API: MENGAMBIL FOTO SURVEY
   Future<void> fetchImage(String photoName, String token) async {
-    if (!mounted) return;
-
     setState(() {
       isLoadingImage = true;
     });
 
     try {
-      String fileName = photoName;
-
-      if (photoName.contains('/')) {
-        fileName = photoName.split('/').last;
-      }
-
-      final url = Uri.parse('$imageUrl/$fileName');
-
+      final fileName = photoName.contains('/')
+          ? photoName.split('/').last
+          : photoName;
+      final url = Uri.parse('https://sijala.biz.id/api/image/$fileName');
       final response = await http.get(
         url,
-        headers: {'Accept': 'image/*', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
         if (!mounted) return;
-
         setState(() {
           imageBytes = response.bodyBytes;
           isLoadingImage = false;
         });
-
         return;
       }
     } catch (e) {
-      debugPrint('IMAGE ERROR: $e');
+      // Handled in finally/outer block
     }
 
     if (mounted) {
@@ -211,69 +154,46 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
     }
   }
 
-  // ============================================================
-  // DELETE SURVEY
-  // ============================================================
-
+  // 5. REST API: MENGHAPUS SURVEY (DELETE)
   Future<void> deleteSurvey() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Survey'),
+        content: const Text('Apakah Anda yakin ingin menghapus survey ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
           ),
-          title: const Text(
-            'Hapus Survey',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
           ),
-          content: const Text('Apakah Anda yakin ingin menghapus survey ini?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
-              child: const Text(
-                'Batal',
-                style: TextStyle(color: secondaryTextColor),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Hapus'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
 
-    if (confirm != true) {
-      return;
-    }
+    if (confirm != true) return;
 
     try {
-      final token = await getToken();
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      final url = Uri.parse(
+        'https://sijala.biz.id/api/v1/surveys/${widget.surveyId}/delete',
+      );
 
-      if (token.isEmpty) {
-        throw Exception('Token tidak ditemukan.');
-      }
-
-      final response = await http.delete(
-        Uri.parse('$baseUrl/surveys/${widget.surveyId}'),
+      final response = await http.post(
+        url,
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
-
-      debugPrint('DELETE STATUS: ${response.statusCode}');
-      debugPrint('DELETE RESPONSE: ${response.body}');
 
       if (!mounted) return;
 
@@ -281,162 +201,127 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Survey berhasil dihapus'),
-            backgroundColor: primaryColor,
+            backgroundColor: Color(0xFF10B981),
           ),
         );
-
         Navigator.pop(context, true);
       } else {
-        showMessage('Gagal menghapus survey.', Colors.red);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal menghapus survey (Kode: ${response.statusCode})',
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
-
-      showMessage('Terjadi kesalahan saat menghapus survey.', Colors.red);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Terjadi kesalahan saat menghapus survey.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
     }
   }
 
-  // ============================================================
-  // OPEN GOOGLE MAPS
-  // ============================================================
+  // 6. NAVIGASI KE FORM EDIT SURVEY
+  Future<void> editSurvey() async {
+    if (survey == null) return;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SurveyFormPage(survey: survey),
+      ),
+    );
 
+    if (result == true && mounted) {
+      fetchDetail();
+    }
+  }
+
+  // 7. HELPER: BUKA MAPS & SALIN KOORDINAT
   Future<void> openGoogleMaps(double lat, double lng) async {
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
     );
-
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        showMessage('Tidak dapat membuka Google Maps.', Colors.red);
-      }
-    } catch (e) {
-      showMessage('Gagal membuka Google Maps.', Colors.red);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak dapat membuka Google Maps')),
+      );
     }
   }
-
-  // ============================================================
-  // COPY COORDINATES
-  // ============================================================
 
   void copyCoordinates(double lat, double lng) {
     Clipboard.setData(ClipboardData(text: '$lat, $lng'));
-
-    showMessage('Koordinat berhasil disalin!', primaryColor);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Koordinat berhasil disalin!')),
+    );
   }
 
-  // ============================================================
-  // FULL IMAGE
-  // ============================================================
-
+  // Dialog melihat gambar ukuran penuh
   void showFullImageDialog(Uint8List bytes) {
     showDialog(
       context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Stack(
-            alignment: Alignment.topRight,
-            children: [
-              InteractiveViewer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(bytes, fit: BoxFit.contain),
-                ),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(bytes, fit: BoxFit.contain),
               ),
-              IconButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                icon: const CircleAvatar(
-                  backgroundColor: Colors.black54,
-                  child: Icon(Icons.close, color: Colors.white),
-                ),
+            ),
+            IconButton(
+              icon: const CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, color: Colors.white, size: 28),
               ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  void showMessage(String message, Color color) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ============================================================
-  // FORMAT DATE
-  // ============================================================
-
-  String formatDate(String? dateString) {
-    if (dateString == null || dateString.isEmpty) {
-      return '-';
-    }
-
-    try {
-      final date = DateTime.parse(dateString.replaceFirst(' ', 'T'));
-
-      return '${date.day.toString().padLeft(2, '0')}/'
-          '${date.month.toString().padLeft(2, '0')}/'
-          '${date.year}';
-    } catch (e) {
-      return dateString;
-    }
-  }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
+  // 8. BUILD TAMPILAN WIDGET (UI)
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
-
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: primaryColor,
+        title: const Text('Detail Survey'),
+        backgroundColor: const Color.fromARGB(255, 1, 17, 87),
         foregroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true,
-
-        title: const Text(
-          'Detail Survey',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-
         actions: [
-          if (survey != null)
+          if (survey != null) ...[
             IconButton(
-              onPressed: deleteSurvey,
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Hapus Survey',
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit Survey',
+              onPressed: editSurvey,
             ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              tooltip: 'Hapus Survey',
+              onPressed: deleteSurvey,
+            ),
+          ],
         ],
       ),
-
       body: buildBody(),
     );
   }
 
-  // ============================================================
-  // BUILD BODY
-  // ============================================================
-
   Widget buildBody() {
-    // LOADING
+    // 1. Loading
     if (isLoading) {
       return const Center(
         child: Column(
@@ -446,14 +331,14 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
             SizedBox(height: 16),
             Text(
               'Memuat detail survey...',
-              style: TextStyle(color: secondaryTextColor),
+              style: TextStyle(color: Color(0xFF64748B)),
             ),
           ],
         ),
       );
     }
 
-    // ERROR
+    // 2. Kondisi Error
     if (errorMessage != null || survey == null) {
       return Center(
         child: Padding(
@@ -461,29 +346,18 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 70, color: Colors.red),
-
+              const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Color(0xFFEF4444),
+              ),
               const SizedBox(height: 16),
-
-              const Text(
-                'Gagal Memuat Survey',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
               Text(
-                errorMessage ?? 'Survey tidak ditemukan.',
+                errorMessage ?? 'Survey tidak ditemukan',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: secondaryTextColor),
+                style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A)),
               ),
-
-              const SizedBox(height: 20),
-
+              const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: fetchDetail,
                 icon: const Icon(Icons.refresh),
@@ -499,120 +373,77 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
       );
     }
 
-    // ==========================================================
-    // DATA SURVEY
-    // ==========================================================
-
-    final title =
-        survey!['title']?.toString() ??
-        survey!['name']?.toString() ??
-        'Tanpa Judul';
-
-    final description =
-        survey!['description']?.toString() ??
-        survey!['deskripsi']?.toString() ??
-        '-';
-
-    String category = 'Tanpa Kategori';
-
-    if (survey!['category_name'] != null) {
-      category = survey!['category_name'].toString();
-    } else if (survey!['category'] is Map) {
-      category = survey!['category']['name']?.toString() ?? 'Tanpa Kategori';
-    }
-
-    final date = formatDate(survey!['created_at']?.toString());
-
-    final latitude = double.tryParse(survey!['latitude']?.toString() ?? '');
-
-    final longitude = double.tryParse(survey!['longitude']?.toString() ?? '');
-
-    final hasValidCoordinates = latitude != null && longitude != null;
-
-    // ==========================================================
-    // CONTENT
-    // ==========================================================
+    // 3. Menyiapkan data
+    final title = survey!['title']?.toString() ?? '';
+    final description = survey!['description']?.toString() ?? '';
+    final category = survey!['category_name']?.toString() ??
+        survey!['category']?['name']?.toString() ??
+        'Tanpa Kategori';
+    final date = survey!['created_at']?.toString() ?? '';
+    final lat = double.tryParse(survey!['latitude']?.toString() ?? '');
+    final lng = double.tryParse(survey!['longitude']?.toString() ?? '');
+    final hasValidCoords = lat != null && lng != null;
 
     return RefreshIndicator(
       color: primaryColor,
       onRefresh: fetchDetail,
-
       child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-
         children: [
-          // ====================================================
-          // INFORMASI UTAMA
-          // ====================================================
+          // KARTU 1: INFORMASI UTAMA SURVEY
           Card(
             elevation: 0,
             color: Colors.white,
-
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: borderColor),
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
-
             child: Padding(
-              padding: const EdgeInsets.all(18),
-
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
-                      vertical: 5,
+                      vertical: 4,
                     ),
-
                     decoration: BoxDecoration(
-                      color: lightBlueColor,
-                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-
                     child: Text(
                       category,
-
                       style: const TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         color: primaryColor,
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 15),
-
+                  const SizedBox(height: 12),
                   Text(
                     title,
-
                     style: const TextStyle(
-                      fontSize: 22,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: textColor,
+                      color: Color(0xFF0F172A),
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       const Icon(
-                        Icons.calendar_today_outlined,
-                        size: 16,
-                        color: secondaryTextColor,
+                        Icons.access_time,
+                        size: 14,
+                        color: Color(0xFF64748B),
                       ),
-
-                      const SizedBox(width: 8),
-
+                      const SizedBox(width: 4),
                       Text(
-                        date,
-
+                        'Waktu: $date',
                         style: const TextStyle(
-                          fontSize: 13,
-                          color: secondaryTextColor,
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
                         ),
                       ),
                     ],
@@ -621,306 +452,193 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
               ),
             ),
           ),
+          const SizedBox(height: 14),
 
-          const SizedBox(height: 15),
-
-          // ====================================================
-          // FOTO
-          // ====================================================
+          // KARTU 2: FOTO SURVEY
           Card(
             elevation: 0,
             color: Colors.white,
             clipBehavior: Clip.antiAlias,
-
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: borderColor),
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
-
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(16),
-
-                  child: Row(
-                    children: [
-                      Icon(Icons.image_outlined, color: primaryColor),
-
-                      SizedBox(width: 8),
-
-                      Text(
-                        'Foto Survey',
-
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: Text(
+                    'Foto Survey',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                 ),
-
                 if (isLoadingImage)
                   const SizedBox(
-                    height: 200,
-
+                    height: 180,
                     child: Center(
                       child: CircularProgressIndicator(color: primaryColor),
                     ),
                   )
                 else if (imageBytes != null)
                   GestureDetector(
-                    onTap: () {
-                      showFullImageDialog(imageBytes!);
-                    },
-
+                    onTap: () => showFullImageDialog(imageBytes!),
                     child: Image.memory(
                       imageBytes!,
-                      height: 220,
+                      height: 200,
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
                   )
                 else
                   Container(
-                    height: 150,
+                    height: 120,
                     width: double.infinity,
                     color: const Color(0xFFF1F5F9),
-
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-
-                      children: [
-                        Icon(
-                          Icons.image_not_supported_outlined,
-                          size: 45,
-                          color: Color(0xFF94A3B8),
-                        ),
-
-                        SizedBox(height: 10),
-
-                        Text(
-                          'Tidak ada foto survey',
-
-                          style: TextStyle(color: Color(0xFF64748B)),
-                        ),
-                      ],
+                    child: const Center(
+                      child: Text(
+                        'Tidak ada foto survey',
+                        style: TextStyle(color: Color(0xFF94A3B8)),
+                      ),
                     ),
                   ),
               ],
             ),
           ),
+          const SizedBox(height: 14),
 
-          const SizedBox(height: 15),
-
-          // ====================================================
-          // DESKRIPSI
-          // ====================================================
+          // KARTU 3: DESKRIPSI SURVEY
           Card(
             elevation: 0,
             color: Colors.white,
-
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: borderColor),
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
-
             child: Padding(
-              padding: const EdgeInsets.all(18),
-
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.description_outlined, color: primaryColor),
-
-                      SizedBox(width: 8),
-
-                      Text(
-                        'Deskripsi',
-
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    'Deskripsi',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
-
-                  const SizedBox(height: 15),
-
+                  const SizedBox(height: 8),
                   Text(
                     description,
-
                     style: const TextStyle(
                       fontSize: 14,
-                      height: 1.5,
-                      color: secondaryTextColor,
+                      color: Color(0xFF334155),
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 14),
 
-          const SizedBox(height: 15),
-
-          // ====================================================
-          // LOKASI
-          // ====================================================
+          // KARTU 4: LOKASI & PETA
           Card(
             elevation: 0,
             color: Colors.white,
             clipBehavior: Clip.antiAlias,
-
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: borderColor),
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
-
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
-
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.location_on_outlined, color: primaryColor),
-
-                          SizedBox(width: 8),
-
-                          Text(
-                            'Lokasi Survey',
-
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        'Lokasi Survey',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-
-                      const SizedBox(height: 12),
-
+                      const SizedBox(height: 4),
                       Text(
-                        hasValidCoordinates
-                            ? 'Latitude: $latitude\n'
-                                  'Longitude: $longitude'
+                        hasValidCoords
+                            ? 'Koordinat: $lat, $lng'
                             : 'Koordinat tidak tersedia',
-
                         style: const TextStyle(
-                          color: secondaryTextColor,
-                          height: 1.5,
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                // MAP
-                if (hasValidCoordinates)
+                if (hasValidCoords) ...[
                   SizedBox(
-                    height: 250,
+                    height: 200,
                     width: double.infinity,
-
                     child: FlutterMap(
                       options: MapOptions(
-                        initialCenter: LatLng(latitude, longitude),
-                        initialZoom: 15,
+                        initialCenter: LatLng(lat, lng),
+                        initialZoom: 15.0,
                       ),
-
                       children: [
                         TileLayer(
                           urlTemplate:
-                              'https://tile.openstreetmap.org/'
-                              '{z}/{x}/{y}.png',
-
-                          userAgentPackageName: 'com.example.field_survey',
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName:
+                              'com.example.flutter_appl_latihan',
                         ),
-
                         MarkerLayer(
                           markers: [
                             Marker(
-                              point: LatLng(latitude, longitude),
-
-                              width: 50,
-                              height: 50,
-
+                              point: LatLng(lat, lng),
+                              width: 48,
+                              height: 48,
                               child: const Icon(
                                 Icons.location_on,
-                                color: Colors.red,
-                                size: 45,
+                                color: Color(0xFFEF4444),
+                                size: 36,
                               ),
                             ),
                           ],
                         ),
                       ],
                     ),
-                  )
-                else
-                  Container(
-                    height: 160,
-                    width: double.infinity,
-                    color: const Color(0xFFF1F5F9),
-
-                    child: const Center(
-                      child: Text(
-                        'Peta tidak tersedia',
-
-                        style: TextStyle(color: Color(0xFF64748B)),
-                      ),
-                    ),
                   ),
-
-                // BUTTON
-                if (hasValidCoordinates)
                   Padding(
-                    padding: const EdgeInsets.all(14),
-
+                    padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () {
-                              copyCoordinates(latitude, longitude);
-                            },
-
-                            icon: const Icon(Icons.copy),
-
-                            label: const Text('Salin'),
-
+                            onPressed: () => copyCoordinates(lat, lng),
+                            icon: const Icon(Icons.copy, size: 16),
+                            label: const Text('Salin Koordinat'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: primaryColor,
                               side: const BorderSide(color: primaryColor),
                             ),
                           ),
                         ),
-
-                        const SizedBox(width: 10),
-
+                        const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: () {
-                              openGoogleMaps(latitude, longitude);
-                            },
-
-                            icon: const Icon(Icons.map),
-
-                            label: const Text('Maps'),
-
+                            onPressed: () => openGoogleMaps(lat, lng),
+                            icon: const Icon(Icons.map, size: 16),
+                            label: const Text('Buka Maps'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: primaryColor,
                               foregroundColor: Colors.white,
@@ -930,11 +648,22 @@ class _SurveyDetailPageState extends State<SurveyDetailPage> {
                       ],
                     ),
                   ),
+                ] else
+                  Container(
+                    height: 180,
+                    width: double.infinity,
+                    color: const Color(0xFFF1F5F9),
+                    child: const Center(
+                      child: Text(
+                        'Peta tidak tersedia (koordinat kosong)',
+                        style: TextStyle(color: Color(0xFF94A3B8)),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
         ],
       ),
     );

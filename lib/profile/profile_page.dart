@@ -476,15 +476,17 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('================================');
 
       final response = await http.get(
-        Uri.parse(
-          'https://sijala.biz.id/api/v1/profile/photo/'
-          '${Uri.encodeComponent(cleanFileName)}',
-        ),
-        headers: {
-          'Accept': 'image/*',
-          'Authorization':
-              'Bearer ${widget.token}',
-        },
+      Uri.parse(
+        'https://sijala.biz.id/api/v1/profile/photo/'
+        '${Uri.encodeComponent(cleanFileName)}'
+        '?v=${DateTime.now().millisecondsSinceEpoch}',
+      ),
+      headers: {
+        'Accept': 'image/*',
+        'Authorization': 'Bearer ${widget.token}',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
       );
 
       debugPrint(
@@ -818,9 +820,13 @@ class _ProfilePageState extends State<ProfilePage> {
         // RESET FOTO
         // ========================================================
 
-        selectedPhoto = null;
-        selectedPhotoBytes = null;
-        profilePhotoBytes = null;
+        if (selectedPhotoBytes != null &&
+            selectedPhotoBytes!.isNotEmpty) {
+            profilePhotoBytes = selectedPhotoBytes;
+          }
+
+            selectedPhoto = null;
+            selectedPhotoBytes = null;
 
         // ========================================================
         // REFRESH PROFILE
@@ -1229,9 +1235,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 Icons
                                     .photo_library_outlined,
                                 color:
-                                    Color(
-                                  0xFF4F46E5,
-                                ),
+                                    Color.fromARGB(255, 1, 17, 87),
                               ),
                               label:
                                   const Text(
@@ -1239,9 +1243,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 style:
                                     TextStyle(
                                   color:
-                                      Color(
-                                    0xFF4F46E5,
-                                  ),
+                                      Color.fromARGB(255, 1, 17, 87),
                                   fontWeight:
                                       FontWeight.w600,
                                 ),
@@ -1708,9 +1710,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ElevatedButton
                                       .styleFrom(
                                 backgroundColor:
-                                    const Color(
-                                  0xFF4F46E5,
-                                ),
+                                    const Color.fromARGB(255, 1, 17, 87),
                                 foregroundColor:
                                     Colors.white,
                                 disabledBackgroundColor:
@@ -1974,7 +1974,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       appBar: AppBar(
         backgroundColor:
-            const Color(0xFF4F46E5),
+            const Color.fromARGB(255, 1, 17, 87),
         foregroundColor:
             Colors.white,
         elevation: 0,
@@ -2164,15 +2164,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       style:
                           OutlinedButton.styleFrom(
                         foregroundColor:
-                            const Color(
-                          0xFF4F46E5,
-                        ),
+                            const Color.fromARGB(255, 1, 17, 87),
                         side:
                             const BorderSide(
                           color:
-                              Color(
-                            0xFF4F46E5,
-                          ),
+                              Color.fromARGB(255, 1, 17, 87),
                         ),
                         shape:
                             RoundedRectangleBorder(
@@ -2437,9 +2433,7 @@ class _ProfilePageState extends State<ProfilePage> {
               Icon(
             icon,
             color:
-                const Color(
-              0xFF4F46E5,
-            ),
+                const Color.fromARGB(255, 1, 17, 87),
           ),
         ),
 

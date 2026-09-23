@@ -33,7 +33,7 @@ class _SurveyFormPageState extends State<SurveyFormPage> {
   // WARNA
   // ============================================================
 
-  static const Color primaryColor = const Color(0xFF4F46E5);
+  static const Color primaryColor = Color.fromARGB(255, 217, 217, 220);
 
   // ============================================================
   // FORM

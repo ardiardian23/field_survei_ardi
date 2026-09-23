@@ -185,9 +185,9 @@ class HomePage extends StatelessWidget {
 
         centerTitle: true,
 
-        backgroundColor: Colors.white,
+        backgroundColor: const Color.fromARGB(255, 1, 17, 87),
 
-        foregroundColor: const Color(0xFF1E1B4B),
+        foregroundColor: const Color.fromARGB(255, 223, 221, 243),
 
         elevation: 0,
       ),

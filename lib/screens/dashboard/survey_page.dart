@@ -281,7 +281,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
 
       appBar: AppBar(
         title: const Text(
-          'Survey',
+          'Halaman Survey',
           style: TextStyle(
             fontWeight:
                 FontWeight.bold,
@@ -289,7 +289,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
         ),
 
         backgroundColor:
-            primaryColor,
+            const Color.fromARGB(255, 1, 17, 87),
 
         foregroundColor:
             Colors.white,
@@ -317,7 +317,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
             openAddSurvey,
 
         backgroundColor:
-            primaryColor,
+            const Color.fromARGB(255, 1, 17, 87),
 
         foregroundColor:
             Colors.white,
