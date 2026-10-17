@@ -634,16 +634,16 @@ class _SurveyFormPageState extends State<SurveyFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color.fromARGB(255, 253, 253, 253),
 
       // ========================================================
       // APPBAR
       // ========================================================
       appBar: AppBar(
-        title: Text(isEdit ? 'Edit Survey' : 'Tambah Survey'),
+        title: Text(isEdit ? 'Edit Survey' : ' Tambah Survey'),
         centerTitle: true,
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1E4BAF),
+        foregroundColor: const Color.fromRGBO(255, 255, 255, 1),
       ),
 
       // ========================================================
@@ -690,7 +690,7 @@ class _SurveyFormPageState extends State<SurveyFormPage> {
                   onPressed: isSubmitting ? null : saveSurvey,
 
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
+                    backgroundColor: const Color(0xFF1E4BAF),
 
                     foregroundColor: Colors.white,
 

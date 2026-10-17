@@ -150,8 +150,8 @@ class HomePage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [
-                    Color(0xFF4F46E5),
-                    Color(0xFF312E81),
+                    Color(0xFF1E4BAF),
+                    Color(0xFF1E4BAF),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -159,7 +159,7 @@ class HomePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: primary.withOpacity(0.2),
+                    color: const Color(0xFF1E4BAF).withOpacity(0.2),
                     blurRadius: 15,
                     offset: const Offset(0, 6),
                   ),
