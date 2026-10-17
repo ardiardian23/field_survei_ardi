@@ -21,10 +21,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // ============================================================
-  // STATE
-  // ============================================================
-
+  
   bool isLoading = true;
   bool isUpdating = false;
 
@@ -396,40 +393,29 @@ class _ProfilePageState extends State<ProfilePage> {
       // LOAD FOTO
       // ==========================================================
 
+      
+      // ==========================================================
+      // LOAD FOTO
+      // ==========================================================
+
       if (photoResult.isNotEmpty) {
-        if (photoResult.startsWith(
-              'http://',
-            ) ||
-            photoResult.startsWith(
-              'https://',
-            )) {
-          // Foto sudah URL lengkap
-          debugPrint(
-            'FOTO BERUPA URL',
-          );
+        if (photoResult.startsWith('http://') ||
+            photoResult.startsWith('https://')) {
+          debugPrint('FOTO BERUPA URL');
 
-          if (mounted) {
-            setState(() {
-              profilePhotoBytes = null;
-            });
-          }
+          // Jangan hapus foto yang sudah tampil.
         } else {
-          // Foto berupa nama file
-          debugPrint(
-            'FOTO BERUPA NAMA FILE',
-          );
+          debugPrint('FOTO BERUPA NAMA FILE');
 
-          await loadProfilePhoto(
-            photoResult,
-          );
+          await loadProfilePhoto(photoResult);
         }
       } else {
-        if (mounted) {
-          setState(() {
-            profilePhotoBytes = null;
-          });
-        }
+        debugPrint('API TIDAK MENGIRIM NAMA FOTO');
+
+        // Pertahankan foto sebelumnya.
+        // Jangan mengatur profilePhotoBytes menjadi null.
       }
+
     } catch (e, stackTrace) {
       debugPrint('================================');
       debugPrint('GET PROFILE ERROR');
@@ -457,25 +443,16 @@ class _ProfilePageState extends State<ProfilePage> {
   // LOAD FOTO DARI API
   // ============================================================
 
-  Future<void> loadProfilePhoto(
-    String fileName,
-  ) async {
-    try {
-      final cleanFileName =
-          fileName.trim();
+  
+Future<void> loadProfilePhoto(String fileName) async {
+  try {
+    final cleanFileName = fileName.trim();
 
-      if (cleanFileName.isEmpty) {
-        return;
-      }
+    if (cleanFileName.isEmpty) return;
 
-      debugPrint('================================');
-      debugPrint('LOAD PROFILE PHOTO');
-      debugPrint(
-        'FILE: $cleanFileName',
-      );
-      debugPrint('================================');
+    debugPrint('LOAD PROFILE PHOTO: $cleanFileName');
 
-      final response = await http.get(
+    final response = await http.get(
       Uri.parse(
         'https://sijala.biz.id/api/v1/profile/photo/'
         '${Uri.encodeComponent(cleanFileName)}'
@@ -487,57 +464,31 @@ class _ProfilePageState extends State<ProfilePage> {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache',
       },
-      );
+    );
 
-      debugPrint(
-        'PHOTO STATUS: ${response.statusCode}',
-      );
+    debugPrint('PHOTO STATUS: ${response.statusCode}');
+    debugPrint('PHOTO SIZE: ${response.bodyBytes.length}');
 
-      debugPrint(
-        'PHOTO SIZE: ${response.bodyBytes.length}',
-      );
+    if (!mounted) return;
 
-      if (!mounted) {
-        return;
-      }
-
-      if (response.statusCode == 200 &&
-          response.bodyBytes.isNotEmpty) {
-        setState(() {
-          profilePhotoBytes =
-              response.bodyBytes;
-        });
-
-        debugPrint(
-          'FOTO BERHASIL DILOAD',
-        );
-      } else {
-        setState(() {
-          profilePhotoBytes = null;
-        });
-
-        debugPrint(
-          'FOTO GAGAL DILOAD',
-        );
-
-        debugPrint(
-          'PHOTO BODY: ${response.body}',
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'LOAD PROFILE PHOTO ERROR: $e',
-      );
-
-      if (!mounted) {
-        return;
-      }
-
+    if (response.statusCode == 200 &&
+        response.bodyBytes.isNotEmpty) {
       setState(() {
-        profilePhotoBytes = null;
+        profilePhotoBytes = response.bodyBytes;
       });
+
+      debugPrint('FOTO BERHASIL DILOAD');
+    } else {
+      // Pertahankan foto sebelumnya jika server gagal.
+      debugPrint('FOTO GAGAL DILOAD');
+      debugPrint('PHOTO BODY: ${response.body}');
     }
+  } catch (e) {
+    // Jangan hapus foto sebelumnya ketika terjadi error.
+    debugPrint('LOAD PROFILE PHOTO ERROR: $e');
   }
+}
+
 
   // ============================================================
   // PILIH FOTO
@@ -820,13 +771,51 @@ class _ProfilePageState extends State<ProfilePage> {
         // RESET FOTO
         // ========================================================
 
-        if (selectedPhotoBytes != null &&
-            selectedPhotoBytes!.isNotEmpty) {
-            profilePhotoBytes = selectedPhotoBytes;
-          }
+        
+        // ========================================================
+        // SIMPAN SALINAN FOTO BARU
+        // ========================================================
 
-            selectedPhoto = null;
-            selectedPhotoBytes = null;
+        final Uint8List? uploadedPhotoBytes =
+            selectedPhotoBytes != null &&
+                    selectedPhotoBytes!.isNotEmpty
+                ? Uint8List.fromList(selectedPhotoBytes!)
+                : null;
+
+        if (uploadedPhotoBytes != null) {
+          setState(() {
+            profilePhotoBytes = uploadedPhotoBytes;
+          });
+        }
+
+        selectedPhoto = null;
+        selectedPhotoBytes = null;
+
+        // ========================================================
+        // REFRESH PROFILE
+        // ========================================================
+
+        if (mounted) {
+          setState(() {
+            isLoading = true;
+          });
+        }
+
+        await getProfile();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (uploadedPhotoBytes != null) {
+          setState(() {
+            profilePhotoBytes = uploadedPhotoBytes;
+          });
+        }
+
+        showMessage('Profil berhasil diperbarui');
+        return;
+
 
         // ========================================================
         // REFRESH PROFILE
